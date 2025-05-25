@@ -1,26 +1,44 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.29;
 
-import {IAccount} from "lib/account-abstraction/contracts/interfaces/IAccount.sol";
+// import {IAccount} from "lib/account-abstraction/contracts/interfaces/IAccount.sol"; // imported in base account
 import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
+import {BaseAccount} from "lib/account-abstraction/contracts/core/BaseAccount.sol";
+import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol"; // remove later on
+import {ECDSA} from "lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
+import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
 
-contract ModularWallet is IAccount {
-    // All components of ERC-4337 revolve around a pseudo-transaction object called a UserOperation which is used to execute actions through a smart contract account. This isn't to be mistaken for a regular transaction type.
+// Put new capabilities in modules (ERC-6900 style).
 
-    // Wallets should be able to translate regular transactions into UserOperations.
-
-    // Account Contract is the smart contract wallet of a user. Wallet developers are required to implement at least two custom functions - one to verify signatures, and another to process transactions.
-
-    // validateUserOp, which takes a UserOperation as input. This function is supposed to verify the signature and nonce on the UserOperation, pay the fee and increment the nonce if verification succeeds, and throw an exception if verification fails.
-
-    // An op execution function, that interprets calldata as an instruction for the wallet to take actions. How this function interprets the calldata and what it does consequently is completely open-ended. However, we expect the most common behavior would be to parse the calldata as an instruction for the wallet to make one or more calls.
+contract ModularWallet is BaseAccount, Ownable {
+    using ECDSA for bytes32;
 
     // STATE VARIABLES
     IEntryPoint private immutable i_entryPoint;
 
-    constructor(address entryPoint) Ownable(msg.sender) {
-        i_entryPoint = IEntryPoint(entryPoint);
+    constructor(address _entryPoint, address _owner) Ownable(_owner) {
+        i_entryPoint = IEntryPoint(_entryPoint);
+    }
+
+    // OVERRIDES
+    function entryPoint() public view override returns (IEntryPoint) {
+        return i_entryPoint;
+    }
+
+    function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        internal
+        view
+        override
+        returns (uint256 validationData)
+    {
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
+        address signer = ECDSA.recover(ethSignedMessageHash, userOp.signature);
+        if (signer != owner()) {
+            return SIG_VALIDATION_FAILED;
+        }
+        return SIG_VALIDATION_SUCCESS;
     }
 
     receive() external payable {}

@@ -43,16 +43,14 @@ contract ModularWalletTest is Test {
         bytes32 salt = keccak256("test");
         address predicted = factory.getAddress(ownerEOA, salt);
 
-        /* 1. pre-fund deposit so wallet can pay gas on first tx */
-
-        // use Bundler attaches msg.value to handleOps method
+        // 1. pre-fund deposit so wallet can pay gas on first tx (or use Bundler attaches msg.value to handleOps method)
         entryPoint.depositTo{value: 1 ether}(predicted);
 
-        /* 2. craft initCode for first-time deploy */
+        // 2. initCode for first time deploy
         bytes memory initCode =
             abi.encodePacked(address(factory), abi.encodeCall(factory.createWallet, (ownerEOA, salt)));
 
-        /* 3. build minimal UserOperation */
+        // 3. build minimal UserOperation
         PackedUserOperation memory userOp;
         userOp.sender = predicted;
         userOp.nonce = 0;
@@ -67,14 +65,14 @@ contract ModularWalletTest is Test {
         userOp.preVerificationGas = 25_000;
         userOp.paymasterAndData = "";
 
-        /* 4. sign */
+        // 4. sign
         bytes32 opHash = entryPoint.getUserOpHash(userOp);
         userOp.signature = _sign(opHash, ownerPK);
 
-        /* 5. simulateValidation off-chain */
+        // 5. simulateValidation off-chain
         // entryPoint.simulateValidation(userOp); // removed
 
-        /* 6. bundle + execute */
+        // 6. bundle and execute
         PackedUserOperation[] memory bundle = new PackedUserOperation[](1);
         bundle[0] = userOp;
 
@@ -83,7 +81,7 @@ contract ModularWalletTest is Test {
 
         entryPoint.handleOps(bundle, payable(beneficiary));
 
-        /* 7. assertions */
+        // 7. assertions
 
         // wallet should now be deployed
         assertGt(predicted.code.length, 0, "wallet not deployed");
@@ -94,6 +92,4 @@ contract ModularWalletTest is Test {
         // nonce consumed
         assertEq(entryPoint.getNonce(predicted, 0), 1, "nonce not bumped");
     }
-
-    receive() external payable {}
 }

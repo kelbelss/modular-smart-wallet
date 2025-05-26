@@ -6,7 +6,6 @@ import {ModularWallet} from "../src/ModularWallet.sol";
 import {WalletFactory} from "../src/WalletFactory.sol";
 
 import {EntryPoint} from "lib/account-abstraction/contracts/core/EntryPoint.sol";
-// import {EntryPointSimulations} from "lib/account-abstraction/contracts/core/EntryPointSimulations.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import {UserOperationLib} from "lib/account-abstraction/contracts/core/UserOperationLib.sol";
@@ -47,7 +46,7 @@ contract ModularWalletTest is Test {
         /* 1. pre-fund deposit so wallet can pay gas on first tx */
 
         // use Bundler attaches msg.value to handleOps method
-        // entryPoint.depositTo{value: 1 ether}(predicted);
+        entryPoint.depositTo{value: 1 ether}(predicted);
 
         /* 2. craft initCode for first-time deploy */
         bytes memory initCode =
@@ -59,11 +58,9 @@ contract ModularWalletTest is Test {
         userOp.nonce = 0;
         userOp.initCode = initCode;
         userOp.callData = ""; // no action, just deploy + validate
-        // userOp.accountGasLimits = "";
-        uint128 verificationGasLimit = 800_000;
+        uint128 verificationGasLimit = 1500_000;
         uint128 callGasLimit = 150_000;
         userOp.accountGasLimits = _pack(verificationGasLimit, callGasLimit);
-        // userOp.gasFees = "";
         uint128 maxPriorityFeePerGas = 1 gwei;
         uint128 maxFeePerGas = 1 gwei;
         userOp.gasFees = _pack(maxFeePerGas, maxPriorityFeePerGas);

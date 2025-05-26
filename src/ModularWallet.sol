@@ -6,7 +6,7 @@ import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {BaseAccount} from "lib/account-abstraction/contracts/core/BaseAccount.sol";
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol"; // remove later on
-import {ECDSA} from "lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import {ECDSA} from "lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol"; // remove later on
 import {MessageHashUtils} from "lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
 
@@ -16,7 +16,7 @@ contract ModularWallet is BaseAccount, Ownable {
     using ECDSA for bytes32;
 
     // STATE VARIABLES
-    IEntryPoint private immutable i_entryPoint;
+    IEntryPoint public immutable i_entryPoint;
 
     constructor(address _entryPoint, address _owner) Ownable(_owner) {
         i_entryPoint = IEntryPoint(_entryPoint);
@@ -39,6 +39,11 @@ contract ModularWallet is BaseAccount, Ownable {
             return SIG_VALIDATION_FAILED;
         }
         return SIG_VALIDATION_SUCCESS;
+    }
+
+    // NOTE: with _validateNonce left empty, EntryPoint’s internal check will still catch replays, but wallet won’t auto-increment??
+    function _validateNonce(uint256 nonce) internal view override {
+        require(nonce == i_entryPoint.getNonce(address(this), 0), "bad nonce");
     }
 
     receive() external payable {}

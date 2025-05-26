@@ -5,6 +5,7 @@ import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPo
 import {Create2} from "lib/openzeppelin-contracts/contracts/utils/Create2.sol"; // audited, well-tested code for the low-level CREATE2 operations
 
 import {ModularWallet} from "./ModularWallet.sol";
+import "forge-std/console.sol";
 
 // Factory - a helper contract that performs a deployment for a new sender contract if necessary.
 
@@ -26,9 +27,11 @@ contract WalletFactory {
      * @return wallet The address of the newly created account.
      */
     function createWallet(address owner, bytes32 salt) external returns (ModularWallet wallet) {
+        console.log("Gas before packing code in factory:", gasleft());
         bytes memory code = abi.encodePacked(type(ModularWallet).creationCode, abi.encode(address(i_entryPoint), owner));
-
+        console.log("Gas after packing code, before deploy in factory:", gasleft());
         address addr = Create2.deploy(0, salt, code);
+        console.log("Gas after deploy in factory:", gasleft());
         wallet = ModularWallet(payable(addr));
         emit AccountCreated(addr, owner, salt);
     }

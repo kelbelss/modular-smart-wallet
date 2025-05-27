@@ -2,6 +2,7 @@
 pragma solidity ^0.8.29;
 
 import {BaseAccount} from "lib/account-abstraction/contracts/core/BaseAccount.sol";
+import {IAccount} from "lib/account-abstraction/contracts/interfaces/IAccount.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
@@ -11,11 +12,18 @@ import {IERC7579Module} from "./erc7579/IERC7579Module.sol";
 import {IERC7579AccountConfig} from "./erc7579/IERC7579AccountConfig.sol";
 import {ModuleTypeIds} from "./erc7579/ModuleTypeIds.sol";
 
+// ERC165
+import {ERC165} from "lib/openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
+import {IERC165} from "lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
+
+// ERC1271
+import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271.sol";
+
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol"; // remove later on
 import {ECDSA} from "lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol"; // remove later on
 import {MessageHashUtils} from "lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol"; // remove later on
 
-contract ModularWallet is BaseAccount, Ownable, IERC7579AccountConfig {
+contract ModularWallet is BaseAccount, Ownable, ERC165, IERC1271, IERC7579AccountConfig {
     using ECDSA for bytes32;
 
     // EVENTS
@@ -106,4 +114,23 @@ contract ModularWallet is BaseAccount, Ownable, IERC7579AccountConfig {
     }
 
     receive() external payable {}
+
+    /// @inheritdoc IERC1271
+    function isValidSignature(bytes32 hash, bytes calldata sig) external view override returns (bytes4) {
+        // delegate to ERC-7780 OwnershipManagement validation module or fallback to owner()
+        // e.g. return IERC1271.isValidSignature.selector;
+    }
+
+    /// @notice ERC-165: support for all interfaces
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165) returns (bool) {
+        return
+        // ERC-165 support for interfaces
+        interfaceId == type(IERC165).interfaceId
+        // ERC-4337 account interface
+        || interfaceId == type(IAccount).interfaceId
+        // ERC-1271 standard signature callback
+        || interfaceId == type(IERC1271).interfaceId
+        // ERC-7579 account configuration
+        || interfaceId == type(IERC7579AccountConfig).interfaceId || super.supportsInterface(interfaceId);
+    }
 }

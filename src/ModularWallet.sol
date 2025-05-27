@@ -11,6 +11,7 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstrac
 import {IERC7579Module} from "./erc7579/IERC7579Module.sol";
 import {IERC7579AccountConfig} from "./erc7579/IERC7579AccountConfig.sol";
 import {ModuleTypeIds} from "./erc7579/ModuleTypeIds.sol";
+import {ISigner} from "./erc7579/ISigner.sol";
 
 // ERC165
 import {ERC165} from "lib/openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
@@ -39,9 +40,11 @@ contract ModularWallet is BaseAccount, Ownable, ERC165, IERC1271, IERC7579Accoun
     IEntryPoint public immutable i_entryPoint;
     /// @dev moduleTypeId => module address => installed?
     mapping(uint256 => mapping(address => bool)) private modules;
+    /// @dev the one-and-only ERC-7780 signer module
+    address public signerModule;
 
-    /// @param _entryPoint  The 4337 EntryPoint singleton
-    /// @param _owner       The initial owner (or passkey module)
+    /// @param _entryPoint The 4337 EntryPoint singleton
+    /// @param _owner The initial owner (or passkey module)
     constructor(address _entryPoint, address _owner) Ownable(_owner) {
         i_entryPoint = IEntryPoint(_entryPoint);
     }
@@ -51,6 +54,10 @@ contract ModularWallet is BaseAccount, Ownable, ERC165, IERC1271, IERC7579Accoun
         require(!modules[moduleTypeId][module], ModuleAlreadyInstalled());
         require(IERC7579Module(module).isModuleType(moduleTypeId), InvalidModuleTypeId());
         modules[moduleTypeId][module] = true;
+
+        if (moduleTypeId == ModuleTypeIds.SIGNER) {
+            signerModule = module;
+        }
         IERC7579Module(module).onInstall(initData);
         emit ModuleInstalled(moduleTypeId, module);
     }
@@ -59,6 +66,10 @@ contract ModularWallet is BaseAccount, Ownable, ERC165, IERC1271, IERC7579Accoun
     function uninstallModule(uint256 moduleTypeId, address module, bytes calldata deInitData) external onlyOwner {
         require(modules[moduleTypeId][module], ModuleNotInstalled());
         modules[moduleTypeId][module] = false;
+
+        if (moduleTypeId == ModuleTypeIds.SIGNER && signerModule == module) {
+            signerModule = address(0);
+        }
         IERC7579Module(module).onUninstall(deInitData);
         emit ModuleUninstalled(moduleTypeId, module);
     }
@@ -77,16 +88,17 @@ contract ModularWallet is BaseAccount, Ownable, ERC165, IERC1271, IERC7579Accoun
     /// @inheritdoc BaseAccount
     function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
         internal
-        view
         override
         returns (uint256 validationData)
     {
-        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
-        address signer = ECDSA.recover(ethSignedMessageHash, userOp.signature);
-        if (signer != owner()) {
-            return SIG_VALIDATION_FAILED;
-        }
-        return SIG_VALIDATION_SUCCESS;
+        address moduleAddress = signerModule;
+        require(moduleAddress != address(0), "no signer installed"); // custom
+
+        // derive an opaque config-ID
+        bytes32 moduleId = bytes32(uint256(uint160(moduleAddress)));
+
+        // call into your ERC-7780 Signer module
+        return ISigner(moduleAddress).checkUserOpSignature(moduleId, userOp, userOpHash);
     }
 
     //  with _validateNonce left empty, EntryPoint’s internal check will still catch replays, but wallet won’t auto-increment??
@@ -110,15 +122,21 @@ contract ModularWallet is BaseAccount, Ownable, ERC165, IERC1271, IERC7579Accoun
     /// @inheritdoc IERC7579AccountConfig
     function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
         // we allow validation & execution modules
-        return (moduleTypeId == ModuleTypeIds.VALIDATION) || (moduleTypeId == ModuleTypeIds.EXECUTION);
+        return (moduleTypeId == ModuleTypeIds.VALIDATION) || (moduleTypeId == ModuleTypeIds.EXECUTION)
+            || (moduleTypeId == ModuleTypeIds.SIGNER);
     }
 
-    receive() external payable {}
-
     /// @inheritdoc IERC1271
-    function isValidSignature(bytes32 hash, bytes calldata sig) external view override returns (bytes4) {
-        // delegate to ERC-7780 OwnershipManagement validation module or fallback to owner()
-        // e.g. return IERC1271.isValidSignature.selector;
+    function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
+        // delegate to ERC-7780 OwnershipManagement validation module
+        address moduleAddress = signerModule;
+        require(moduleAddress != address(0), "no signer installed"); // custom
+
+        // derive a 32-byte "id" from the module address
+        bytes32 moduleId = bytes32(uint256(uint160(moduleAddress)));
+
+        // delegate to the ERC-7780 Signer module
+        return ISigner(moduleAddress).checkSignature(moduleId, address(this), hash, signature);
     }
 
     /// @notice ERC-165: support for all interfaces
@@ -133,4 +151,6 @@ contract ModularWallet is BaseAccount, Ownable, ERC165, IERC1271, IERC7579Accoun
         // ERC-7579 account configuration
         || interfaceId == type(IERC7579AccountConfig).interfaceId || super.supportsInterface(interfaceId);
     }
+
+    receive() external payable {}
 }

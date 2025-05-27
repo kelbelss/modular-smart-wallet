@@ -2,7 +2,8 @@
 pragma solidity ^0.8.29;
 
 import {Test, console} from "lib/forge-std/src/Test.sol";
-import {EntryPoint} from "lib/account-abstraction/contracts/core/EntryPoint.sol";
+// import {EntryPoint} from "lib/account-abstraction/contracts/core/EntryPoint.sol";
+import {EntryPointSimulations} from "lib/account-abstraction/contracts/core/EntryPointSimulations.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 
 import {MockModule} from "./mocks/MockModule.sol";
@@ -13,12 +14,12 @@ import {IERC7579Module} from "../src/erc7579/IERC7579Module.sol";
 import {ModuleTypeIds} from "../src/erc7579/ModuleTypeIds.sol";
 
 contract ModuleSetup7579 is Test {
-    EntryPoint entryPoint;
+    EntryPointSimulations entryPoint;
     WalletFactory factory;
 
     function setUp() public {
         // deploy real EntryPoint singleton
-        entryPoint = new EntryPoint();
+        entryPoint = new EntryPointSimulations();
         // wire it into factory
         factory = new WalletFactory(IEntryPoint(address(entryPoint)));
     }

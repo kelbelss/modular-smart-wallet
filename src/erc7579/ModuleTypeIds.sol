@@ -9,4 +9,6 @@ library ModuleTypeIds {
     uint256 internal constant EXECUTION = 2;
     uint256 internal constant FALLBACK = 3;
     uint256 internal constant HOOKS = 4;
+    /// @notice ERC-7780 signer modules
+    uint256 internal constant SIGNER = 6;
 }

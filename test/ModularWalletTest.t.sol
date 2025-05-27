@@ -56,7 +56,7 @@ contract ModularWalletTest is Test {
         userOp.nonce = 0;
         userOp.initCode = initCode;
         userOp.callData = ""; // no action, just deploy + validate
-        uint128 verificationGasLimit = 1500_000;
+        uint128 verificationGasLimit = 2000_000;
         uint128 callGasLimit = 150_000;
         userOp.accountGasLimits = _pack(verificationGasLimit, callGasLimit);
         uint128 maxPriorityFeePerGas = 1 gwei;

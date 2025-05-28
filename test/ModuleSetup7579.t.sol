@@ -2,15 +2,18 @@
 pragma solidity ^0.8.29;
 
 import {Test, console} from "lib/forge-std/src/Test.sol";
-// import {EntryPoint} from "lib/account-abstraction/contracts/core/EntryPoint.sol";
+
+// ERC-4337 EntryPoint simulation
 import {EntryPointSimulations} from "lib/account-abstraction/contracts/core/EntryPointSimulations.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 
-import {MockModule} from "./mocks/MockModule.sol";
+// Contracts being tested
 import {ModularWallet} from "../src/ModularWallet.sol";
 import {WalletFactory} from "../src/WalletFactory.sol";
 import {OwnershipManagement} from "../src/modules/OwnershipManagement.sol";
 
+// ERC-7579 Modular SCs code
+import {MockModule} from "./mocks/MockModule.sol";
 import {IERC7579Module} from "../src/erc7579/IERC7579Module.sol";
 import {ModuleTypeIds} from "../src/erc7579/ModuleTypeIds.sol";
 
@@ -20,16 +23,16 @@ contract ModuleSetup7579 is Test {
     OwnershipManagement ownershipModule;
 
     function setUp() public {
-        // deploy real EntryPoint singleton
+        // deploy EntryPoint
         entryPoint = new EntryPointSimulations();
         // deploy the ownership management module
         ownershipModule = new OwnershipManagement();
-        // wire it into factory
+        // deploy factory, wiring in the EntryPoint & signer module
         factory = new WalletFactory(IEntryPoint(address(entryPoint)), address(ownershipModule));
     }
 
     function testInstallUninstallValidationModule() public {
-        // 1) Deploy a wallet for ownerEOA via CREATE2
+        // A) Deploy a wallet for ownerEOA via CREATE2
         address ownerEOA = vm.addr(1);
         bytes32 salt = keccak256("test");
         bytes32 testX = bytes32(uint256(0x123));
@@ -42,10 +45,10 @@ contract ModuleSetup7579 is Test {
             "ownership module must be auto-installed"
         );
 
-        // 2) Deploy the fake validation module
+        // B) Deploy the fake validation module
         MockModule mock = new MockModule();
 
-        // 3) Before installing, supportsModule should be false
+        // C) Before installing, supportsModule should be false
         assertFalse(wallet.isModuleInstalled(ModuleTypeIds.VALIDATION, address(mock)));
 
         // uninstalling before install must revert
@@ -53,14 +56,14 @@ contract ModuleSetup7579 is Test {
         vm.expectRevert(ModularWallet.ModuleNotInstalled.selector);
         wallet.uninstallModule(ModuleTypeIds.VALIDATION, address(mock), hex"");
 
-        // 4) Install it
+        // D) Install it
         wallet.installModule(ModuleTypeIds.VALIDATION, address(mock), hex"");
         // module’s onInstall must have run
         assertTrue(mock.installed());
         // wallet should now report it
         assertTrue(wallet.isModuleInstalled(ModuleTypeIds.VALIDATION, address(mock)));
 
-        // 5) Uninstall it
+        // E) Uninstall it
         wallet.uninstallModule(ModuleTypeIds.VALIDATION, address(mock), hex"");
         // module’s onUninstall must have run
         assertFalse(mock.installed());

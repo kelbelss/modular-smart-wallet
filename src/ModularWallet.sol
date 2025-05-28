@@ -1,93 +1,115 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.29;
 
+// ERC-4337 (Account Abstraction)
 import {BaseAccount} from "lib/account-abstraction/contracts/core/BaseAccount.sol";
 import {IAccount} from "lib/account-abstraction/contracts/interfaces/IAccount.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
 
-// ERC7579
+// ERC-7579 (Modular Smart Account)
 import {IERC7579Module} from "./erc7579/IERC7579Module.sol";
 import {IERC7579AccountConfig} from "./erc7579/IERC7579AccountConfig.sol";
 import {IERC7579Execution} from "./erc7579/IERC7579Execution.sol";
 import {ModuleTypeIds} from "./erc7579/ModuleTypeIds.sol";
 import {ISigner} from "./erc7579/ISigner.sol";
 
-// ERC165
+// ERC-165
 import {ERC165} from "lib/openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
 import {IERC165} from "lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 
-// ERC1271
+// ERC-1271 (Smart Contract Signatures)
 import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271.sol";
 
+/**
+ * @title ModularWallet
+ * @notice A modular ERC-4337 smart contract wallet with pluggable modules for validation and execution.
+ *         Core logic is split across modules (e.g. OwnershipManagement for signature checks).
+ * @author Kelly Smulian
+ */
 contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, IERC7579Execution {
-    // EVENTS
+    // --- Events ---
     event ModuleInstalled(uint256 indexed moduleTypeId, address indexed module);
     event ModuleUninstalled(uint256 indexed moduleTypeId, address indexed module);
 
-    // ERRORS
+    // --- Errors ---
     error NotAModule();
     error ModuleAlreadyInstalled();
+    error CannotUninstall_UseRotateKeysInstead();
     error InvalidModuleTypeId();
     error ModuleNotInstalled();
+    error NoOwnershipModule();
 
-    /// @dev The 4337 EntryPoint singleton
+    // --- State ---
+    /// @notice ERC-4337 EntryPoint singleton
     IEntryPoint public immutable i_entryPoint;
-    /// @dev moduleTypeId => module address => installed?
+    /// @notice mapping: moduleTypeId => module address => installed bool
     mapping(uint256 => mapping(address => bool)) private modules;
-    /// @dev the one-and-only ERC-7780 signer module
-    address public signerModule;
+    /// @notice currently active ERC-7780 Ownership Management module
+    address public ownershipModule;
 
+    // --- Modifiers ---
+    /// @dev Restrict caller to the configured EntryPoint
     modifier onlyEntryPoint() {
         _requireFromEntryPoint();
         _;
     }
 
+    /// @dev Restrict caller to a module of type EXECUTION
     modifier onlyExecutionModule() {
         require(modules[ModuleTypeIds.EXECUTION][msg.sender], NotAModule());
         _;
     }
 
-    // /// @param _entryPoint The 4337 EntryPoint singleton
-    // constructor(address _entryPoint) {
-    //     i_entryPoint = IEntryPoint(_entryPoint);
-    // }
-
-    /// @param _entryPoint The 4337 EntryPoint singleton
-    /// @param ownershipModule The OwnershipManagement module to install
-    /// @param initData ABI-encoded init data for the module (e.g. owner EOA)
-    constructor(address _entryPoint, address ownershipModule, bytes memory initData) {
+    // --- Constructor ---
+    /**
+     * @param _entryPoint The 4337 EntryPoint Address
+     * @param _ownershipModule The OwnershipManagement module
+     * @param initData ABI-encoded init data for the ownership module (e.g. public key)
+     */
+    constructor(address _entryPoint, address _ownershipModule, bytes memory initData) {
         i_entryPoint = IEntryPoint(_entryPoint);
 
-        // bootstrap the signer module
-        modules[ModuleTypeIds.SIGNER][ownershipModule] = true;
-        signerModule = ownershipModule;
-        IERC7579Module(ownershipModule).onInstall(initData);
-        emit ModuleInstalled(ModuleTypeIds.SIGNER, ownershipModule);
+        // bootstrap the ownership module
+        modules[ModuleTypeIds.SIGNER][_ownershipModule] = true;
+        ownershipModule = _ownershipModule;
+        IERC7579Module(_ownershipModule).onInstall(initData);
+        emit ModuleInstalled(ModuleTypeIds.SIGNER, _ownershipModule);
     }
 
-    /// @notice Install a module of a given type
+    // --- Module Management ---
+    /**
+     * @notice Install a module for validation or execution
+     * @param moduleTypeId The ERC-7579 module type identifier
+     * @param module Address of the module to install
+     * @param initData ABI-encoded data for module initialisation
+     */
     function installModule(uint256 moduleTypeId, address module, bytes calldata initData) external onlyEntryPoint {
         require(!modules[moduleTypeId][module], ModuleAlreadyInstalled());
         require(IERC7579Module(module).isModuleType(moduleTypeId), InvalidModuleTypeId());
+
         modules[moduleTypeId][module] = true;
 
+        // track signer modules specially
         if (moduleTypeId == ModuleTypeIds.SIGNER) {
-            signerModule = module;
+            ownershipModule = module;
         }
         IERC7579Module(module).onInstall(initData);
         emit ModuleInstalled(moduleTypeId, module);
     }
 
-    /// @notice Uninstall a module of a given type
+    /**
+     * @notice Uninstall a previously installed module
+     * @param moduleTypeId The ERC-7579 module type identifier
+     * @param module Address of the module to uninstall
+     * @param deInitData ABI-encoded data for module de-initialisation
+     */
     function uninstallModule(uint256 moduleTypeId, address module, bytes calldata deInitData) external onlyEntryPoint {
+        require(moduleTypeId != ModuleTypeIds.SIGNER, CannotUninstall_UseRotateKeysInstead());
         require(modules[moduleTypeId][module], ModuleNotInstalled());
         modules[moduleTypeId][module] = false;
 
-        if (moduleTypeId == ModuleTypeIds.SIGNER && signerModule == module) {
-            signerModule = address(0);
-        }
         IERC7579Module(module).onUninstall(deInitData);
         emit ModuleUninstalled(moduleTypeId, module);
     }
@@ -97,7 +119,7 @@ contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, 
         return modules[moduleTypeId][module];
     }
 
-    // OVERRIDES
+    // --- ERC-4337 Overrides ---
     /// @inheritdoc BaseAccount
     function entryPoint() public view override returns (IEntryPoint) {
         return i_entryPoint;
@@ -109,22 +131,22 @@ contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, 
         override
         returns (uint256 validationData)
     {
-        address moduleAddress = signerModule;
-        require(moduleAddress != address(0), "no signer installed"); // custom
+        address moduleAddress = ownershipModule;
+        require(moduleAddress != address(0), NoOwnershipModule());
 
         // derive an opaque config-ID
         bytes32 moduleId = bytes32(uint256(uint160(moduleAddress)));
 
-        // call into your ERC-7780 Signer module
+        // call into ERC-7780 Signer
         return ISigner(moduleAddress).checkUserOpSignature(moduleId, userOp, userOpHash);
     }
 
-    //  with _validateNonce left empty, EntryPoint’s internal check will still catch replays, but wallet won’t auto-increment??
     // @inheritdoc BaseAccount
     function _validateNonce(uint256 nonce) internal view override {
         require(nonce == i_entryPoint.getNonce(address(this), 0), "bad nonce");
     }
 
+    // --- ERC-7579 Account Config ---
     /// @inheritdoc IERC7579AccountConfig
     function accountId() external pure override returns (string memory) {
         return "myorg.modularwallet.v1";
@@ -132,23 +154,22 @@ contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, 
 
     /// @inheritdoc IERC7579AccountConfig
     function supportsExecutionMode(bytes32 mode) external pure override returns (bool) {
-        // for now we support only mode=0 meaning “single call”
-        // in future you can decode the mode and check batch/static/delegate
+        // For MVP: only support single-call mode
         return mode == bytes32(0);
     }
 
     /// @inheritdoc IERC7579AccountConfig
     function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
-        // we allow validation & execution modules
-        return (moduleTypeId == ModuleTypeIds.VALIDATION) || (moduleTypeId == ModuleTypeIds.EXECUTION)
-            || (moduleTypeId == ModuleTypeIds.SIGNER);
+        return moduleTypeId == ModuleTypeIds.VALIDATION || moduleTypeId == ModuleTypeIds.EXECUTION
+            || moduleTypeId == ModuleTypeIds.SIGNER;
     }
 
+    // --- ERC-1271 Override ---
     /// @inheritdoc IERC1271
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         // delegate to ERC-7780 OwnershipManagement validation module
-        address moduleAddress = signerModule;
-        require(moduleAddress != address(0), "no signer installed"); // custom
+        address moduleAddress = ownershipModule;
+        require(moduleAddress != address(0), NoOwnershipModule());
 
         // derive a 32-byte "id" from the module address
         bytes32 moduleId = bytes32(uint256(uint160(moduleAddress)));
@@ -157,21 +178,7 @@ contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, 
         return ISigner(moduleAddress).checkSignature(moduleId, address(this), hash, signature);
     }
 
-    /// @notice ERC-165: support for all interfaces
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165) returns (bool) {
-        return
-        // ERC-165 support for interfaces
-        interfaceId == type(IERC165).interfaceId
-        // ERC-4337 account interface
-        || interfaceId == type(IAccount).interfaceId
-        // ERC-1271 standard signature callback
-        || interfaceId == type(IERC1271).interfaceId
-        // ERC-7579 execution interface
-        || interfaceId == type(IERC7579Execution).interfaceId
-        // ERC-7579 account configuration
-        || interfaceId == type(IERC7579AccountConfig).interfaceId || super.supportsInterface(interfaceId);
-    }
-
+    // --- ERC-7579 Execution ---
     /// @inheritdoc IERC7579Execution
     function execute(bytes32 mode, bytes calldata callData) external override onlyEntryPoint {
         _dispatch(mode, callData);
@@ -185,23 +192,20 @@ contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, 
         returns (bytes[] memory returnData)
     {
         _dispatch(mode, callData);
-        // single-call: no per-call return data, so return empty array
+        // For MVP: single-call - no per-call return data, so return empty array
         return new bytes[](0);
-        // TODO: future: support batch calls and return per-call data
     }
 
-    // internal router
+    /// @dev Internal router for single-call execution
     function _dispatch(bytes32 mode, bytes calldata callData) internal {
-        // For MVP: accept only “single-call” mode (all-zeros)
+        // For MVP: accept only single-call mode
         require(mode == bytes32(0), "unsupported mode");
-
         // decode a single call:  (to, value, callData)
         (address to, uint256 value, bytes memory data) = abi.decode(callData, (address, uint256, bytes));
-
-        _call(to, value, data); // doesnt exist in newer BaseAccount
+        _call(to, value, data);
     }
 
-    /// @dev perform a plain call + bubble up revert reason if present (used in _dispatch)
+    /// @dev Low-level call helper with revert bubbling
     function _call(address to, uint256 value, bytes memory data) internal {
         (bool success, bytes memory ret) = to.call{value: value}(data);
 
@@ -218,5 +222,20 @@ contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, 
         }
     }
 
+    // --- ERC-165 Support ---
+    /// @inheritdoc ERC165
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165) returns (bool) {
+        return
+        // ERC-4337 account interface
+        interfaceId == type(IAccount).interfaceId
+        // ERC-1271 standard signature callback
+        || interfaceId == type(IERC1271).interfaceId
+        // ERC-7579 execution interface
+        || interfaceId == type(IERC7579Execution).interfaceId
+        // ERC-7579 account configuration
+        || interfaceId == type(IERC7579AccountConfig).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    /// @notice Receive Ether (needed for execute calls that send ETH)
     receive() external payable {}
 }

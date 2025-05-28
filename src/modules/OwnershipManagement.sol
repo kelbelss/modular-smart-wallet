@@ -15,6 +15,9 @@ import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271
 
 /// @notice WebAuthn / passkey signer module (ERC-7579/7780 type = 6)
 contract OwnershipManagement is IERC7579Module, ISigner {
+    // ERRORS
+    error OnlyWalletCanCall();
+
     struct PubKey {
         bytes32 x;
         bytes32 y;
@@ -95,4 +98,19 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     //     // TODO: guardian / timelock checks
     //     pubKey = newPubKey;
     // }
+
+    /// @notice Rotate to a new P-256 public key; must be called by the wallet itself
+    function rotateKey(bytes32 newX, bytes32 newY) external {
+        // only a wallet that ran onInstall (and so has a non-zero x) may call
+        require(publicKeyOf[msg.sender].x != bytes32(0), OnlyWalletCanCall());
+        // fix
+        publicKeyOf[msg.sender] = PubKey(newX, newY);
+    }
+
+    // remove later
+    /// @notice For testing: read the stored P-256 public key for a wallet
+    function getPublicKey(address wallet) external view returns (bytes32 x, bytes32 y) {
+        PubKey storage pk = publicKeyOf[wallet];
+        return (pk.x, pk.y);
+    }
 }

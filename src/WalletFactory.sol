@@ -5,10 +5,6 @@ import {ModularWallet} from "./ModularWallet.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {Create2} from "lib/openzeppelin-contracts/contracts/utils/Create2.sol"; // audited, well-tested code for the low-level CREATE2 operations
 
-import "forge-std/console.sol"; // remove later on
-
-// Factory - a helper contract that performs a deployment for a new sender contract if necessary.
-
 // Factory Contract - When using a wallet for the first time, the initCode field of the UserOperation is used to specify creation of the smart contract wallet. This is used concurrently with the first actual operation of the wallet (in the same UserOperation). Therefore, wallet developers also need to implement the account factory contract (for example: BLSAccountFactory.sol(opens in a new tab)). Creating new wallets should use the CREATE2 method to ensure the determinacy of generated addresses. CREATE2
 
 // Deterministic CREATE2 factory
@@ -29,10 +25,10 @@ contract WalletFactory {
      * @param salt A unique salt for CREATE2.
      * @return wallet The address of the newly created account.
      */
-    function createWallet(bytes32 salt) external returns (ModularWallet wallet) {
+    function createWallet(bytes32 salt, bytes calldata ownershipInitData) external returns (ModularWallet wallet) {
         bytes memory code = abi.encodePacked(
             type(ModularWallet).creationCode,
-            abi.encode(address(i_entryPoint), address(i_ownershipModule), abi.encode(msg.sender))
+            abi.encode(address(i_entryPoint), address(i_ownershipModule), ownershipInitData)
         );
 
         address addr = Create2.deploy(0, salt, code);

@@ -10,7 +10,8 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstrac
 
 import {P256Verifier} from "lib/p256-verifier/src/P256Verifier.sol";
 import {WebAuthn} from "lib/p256-verifier/src/WebAuthn.sol";
-import {IERC1271} from "lib/account-abstraction/contracts/interfaces/IERC1271.sol";
+import {P256} from "lib/p256-verifier/src/P256.sol";
+import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271.sol";
 
 /// @notice WebAuthn / passkey signer module (ERC-7579/7780 type = 6)
 contract OwnershipManagement is IERC7579Module, ISigner {
@@ -52,9 +53,13 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     }
 
     /// internal helper reused by both 4337 & ERC-1271 paths
-    function _verify(PubKey storage privateKey, PasskeySig memory pkSig) private view returns (bool) {
-        bytes32 h = WebAuthn.hash(pkSig.authenticatorData, pkSig.clientDataJSON);
-        return P256Verifier.verifySignature(h, pkSig.r, pkSig.s, privateKey.x, privateKey.y);
+    function _verify(PubKey storage pubKey, PasskeySig memory pkSig) private view returns (bool) {
+        // hash the raw clientDataJSON bytes
+        bytes32 clientDataHash = sha256(pkSig.clientDataJSON);
+        // hash(concatenate(authData, clientDataHash))
+        bytes32 h = sha256(abi.encodePacked(pkSig.authenticatorData, clientDataHash));
+
+        return P256.verifySignature(h, uint256(pkSig.r), uint256(pkSig.s), uint256(pubKey.x), uint256(pubKey.y));
     }
 
     /// @inheritdoc ISigner
@@ -70,7 +75,8 @@ contract OwnershipManagement is IERC7579Module, ISigner {
         return SIG_VALIDATION_FAILED;
     }
 
-    /// @inheritdoc ISigner ERC-1271
+    /// @inheritdoc ISigner
+    // ERC-1271
     function checkSignature(
         bytes32, // id (ignored)
         address sender,
@@ -78,7 +84,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
         bytes calldata sig
     ) external view override returns (bytes4) {
         PasskeySig memory ps = abi.decode(sig, (PasskeySig));
-        if (_verify(pubKeyOf[sender], ps)) {
+        if (_verify(publicKeyOf[sender], ps)) {
             return IERC1271.isValidSignature.selector;
         }
         return bytes4(0xffffffff);

@@ -9,6 +9,7 @@ import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPo
 import {MockModule} from "./mocks/MockModule.sol";
 import {ModularWallet} from "../src/ModularWallet.sol";
 import {WalletFactory} from "../src/WalletFactory.sol";
+import {OwnershipManagement} from "../src/modules/OwnershipManagement.sol";
 
 import {IERC7579Module} from "../src/erc7579/IERC7579Module.sol";
 import {ModuleTypeIds} from "../src/erc7579/ModuleTypeIds.sol";
@@ -16,19 +17,30 @@ import {ModuleTypeIds} from "../src/erc7579/ModuleTypeIds.sol";
 contract ModuleSetup7579 is Test {
     EntryPointSimulations entryPoint;
     WalletFactory factory;
+    OwnershipManagement ownershipModule;
 
     function setUp() public {
         // deploy real EntryPoint singleton
         entryPoint = new EntryPointSimulations();
+        // deploy the ownership management module
+        ownershipModule = new OwnershipManagement();
         // wire it into factory
-        factory = new WalletFactory(IEntryPoint(address(entryPoint)));
+        factory = new WalletFactory(IEntryPoint(address(entryPoint)), address(ownershipModule));
     }
 
     function testInstallUninstallValidationModule() public {
         // 1) Deploy a wallet for ownerEOA via CREATE2
         address ownerEOA = vm.addr(1);
         bytes32 salt = keccak256("test");
-        ModularWallet wallet = factory.createWallet(ownerEOA, salt);
+        bytes32 testX = bytes32(uint256(0x123));
+        bytes32 testY = bytes32(uint256(0x456));
+        vm.prank(ownerEOA);
+        ModularWallet wallet = factory.createWallet(salt, abi.encode(testX, testY));
+
+        assertTrue(
+            wallet.isModuleInstalled(ModuleTypeIds.SIGNER, address(ownershipModule)),
+            "ownership module must be auto-installed"
+        );
 
         // 2) Deploy the fake validation module
         MockModule mock = new MockModule();
@@ -37,7 +49,7 @@ contract ModuleSetup7579 is Test {
         assertFalse(wallet.isModuleInstalled(ModuleTypeIds.VALIDATION, address(mock)));
 
         // uninstalling before install must revert
-        vm.startPrank(ownerEOA);
+        vm.startPrank(address(entryPoint));
         vm.expectRevert(ModularWallet.ModuleNotInstalled.selector);
         wallet.uninstallModule(ModuleTypeIds.VALIDATION, address(mock), hex"");
 

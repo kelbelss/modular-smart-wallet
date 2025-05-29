@@ -92,7 +92,7 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
 - **No Custody**: transfers always execute through the wallet via `executeFromExecutor`.  
 - **Install/Uninstall**: plug in or remove without touching core wallet code.
 
-
+A more elegant DCA module can be built by integrating [UniSwap v4 TWAMM Hooks](https://blog.uniswap.org/v4-twamm-hook).
 
 ## Standards
 

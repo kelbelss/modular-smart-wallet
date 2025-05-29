@@ -11,9 +11,9 @@ import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
 
 // P-256 WebAuthn Verification Libraries
-import {P256Verifier} from "lib/p256-verifier/src/P256Verifier.sol";
-import {WebAuthn} from "lib/p256-verifier/src/WebAuthn.sol";
-import {P256} from "lib/p256-verifier/src/P256.sol";
+import {P256Verifier} from "lib/p256-verifier-solcv29/P256Verifier.sol";
+import {WebAuthn} from "lib/p256-verifier-solcv29/WebAuthn.sol";
+import {P256} from "lib/p256-verifier-solcv29/P256.sol";
 
 // ERC-1271 Smart Contract Sig
 import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271.sol";

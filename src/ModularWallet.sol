@@ -141,11 +141,6 @@ contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, 
         return ISigner(moduleAddress).checkUserOpSignature(moduleId, userOp, userOpHash);
     }
 
-    // @inheritdoc BaseAccount
-    function _validateNonce(uint256 nonce) internal view override {
-        require(nonce == i_entryPoint.getNonce(address(this), 0), "bad nonce");
-    }
-
     // --- ERC-7579 Account Config ---
     /// @inheritdoc IERC7579AccountConfig
     function accountId() external pure override returns (string memory) {
@@ -160,8 +155,7 @@ contract ModularWallet is BaseAccount, ERC165, IERC1271, IERC7579AccountConfig, 
 
     /// @inheritdoc IERC7579AccountConfig
     function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
-        return moduleTypeId == ModuleTypeIds.VALIDATION || moduleTypeId == ModuleTypeIds.EXECUTION
-            || moduleTypeId == ModuleTypeIds.SIGNER;
+        return moduleTypeId == ModuleTypeIds.EXECUTION || moduleTypeId == ModuleTypeIds.SIGNER;
     }
 
     // --- ERC-1271 Override ---

@@ -20,14 +20,26 @@ import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271
 
 /**
  * @title OwnershipManagement
- * @notice ERC-7579 "signer" (ERC-7780) module for passkey-based signature validation using WebAuthn P-256.
- * @dev Stores an uncompressed EC public key per wallet, verifies UserOp and ERC-1271 signatures.
- *      Key rotation occurs by calling `rotateKey` via the wallet's execute path.
+ * @notice ERC-7579 "signer" (ERC-7780) module for passkey-based signature validation using WebAuthn P-256, with
+ *         built-in emergency fallback recovery.
+ * @dev Stores a P-256 public key per wallet and supports rotating it via both normal
+ *      UserOp flows and a time-locked fallback mechanism.
  * @author Kelly Smulian
  */
 contract OwnershipManagement is IERC7579Module, ISigner {
+    // --- Events ---
+    /// @notice Emitted when a new fallback admin is set
+    event FallbackAdminChanged(address indexed newAdmin);
+    /// @notice Emitted when an emergency key rotation is requested
+    event EmergencyRotateRequested(address indexed wallet, bytes32 newX, bytes32 newY, uint256 unlockTime);
+    /// @notice Emitted when an emergency key rotation is executed
+    event EmergencyRotateExecuted(address indexed wallet, bytes32 newX, bytes32 newY);
+
     // --- Errors ---
     error OnlyWalletCanCall();
+    error NotFallbackAdmin();
+    error TooEarly();
+    // error NoSignerModule();
 
     // --- Types ---
     /// @notice Uncompressed P-256 public key coordinates
@@ -47,8 +59,16 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     // --- State ---
     /// @notice wallet address => its P-256 public key
     mapping(address wallet => PubKey) internal publicKeyOf; //  wallet → key
-    /// @notice wallet address => owner EOA (optional future use)
-    mapping(address => address) private ownerOf;
+    // /// @notice wallet address => owner EOA (optional future use)
+    // mapping(address => address) private ownerOf;
+
+    /// @notice Fallback admin allowed to perform emergency recovery
+    address public fallbackAdmin;
+    /// @notice Timestamp after which the emergency rotation can be executed
+    uint256 public emergencyUnlock;
+    /// @notice Pending fallback key coordinates
+    bytes32 private pendingX;
+    bytes32 private pendingY;
 
     // --- Module Identification ---
     /**
@@ -63,11 +83,12 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     /**
      * @inheritdoc IERC7579Module
      * @dev Called by the wallet during `installModule`. Expects `initData = abi.encode(x, y)`.
-     * @param initData ABI-encoded initial public key coordinates (x, y)
+     * @param initData ABI-encoded initial public key (x, y) and fallback admin encoded as abi.encode(x, y, fallbackAdmin)
      */
     function onInstall(bytes calldata initData) external override {
-        (bytes32 x, bytes32 y) = abi.decode(initData, (bytes32, bytes32));
+        (bytes32 x, bytes32 y, address fbAdmin) = abi.decode(initData, (bytes32, bytes32, address));
         publicKeyOf[msg.sender] = PubKey(x, y);
+        fallbackAdmin = fbAdmin; // emergencyUnlock and pending keys default to zero
     }
 
     /**
@@ -76,6 +97,10 @@ contract OwnershipManagement is IERC7579Module, ISigner {
      */
     function onUninstall(bytes calldata) external override {
         delete publicKeyOf[msg.sender];
+        delete fallbackAdmin;
+        delete emergencyUnlock;
+        delete pendingX;
+        delete pendingY;
     }
 
     // --- Signature Verification ---
@@ -127,6 +152,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     /**
      * @notice Rotate the on-chain P-256 public key for a wallet
      * @dev Must be called by the wallet itself via `execute` (not by an EOA)
+     * @dev Must be routed through wallet.execute() so msg.sender==wallet
      * @param newX New public key X coordinate
      * @param newY New public key Y coordinate
      */
@@ -134,6 +160,47 @@ contract OwnershipManagement is IERC7579Module, ISigner {
         // only a wallet that ran onInstall (has a non-zero x) may call
         require(publicKeyOf[msg.sender].x != bytes32(0), OnlyWalletCanCall());
         publicKeyOf[msg.sender] = PubKey(newX, newY);
+    }
+
+    // --- Emergency Recovery ---
+    /**
+     * @notice Initiate a time-locked emergency key swap by fallback admin
+     * @param newX X-coordinate for replacement key
+     * @param newY Y-coordinate for replacement key
+     * @dev Called by fallbackAdmin to schedule emergency rotation
+     */
+    function requestEmergencyRotate(bytes32 newX, bytes32 newY) external {
+        if (msg.sender != fallbackAdmin) revert NotFallbackAdmin();
+        emergencyUnlock = block.timestamp + 1 days;
+        pendingX = newX;
+        pendingY = newY;
+        emit EmergencyRotateRequested(msg.sender, newX, newY, emergencyUnlock);
+    }
+
+    /**
+     * @notice Execute the scheduled emergency rotation after unlock time
+     * @dev Only fallbackAdmin can call, and only after emergencyUnlock
+     */
+    function executeEmergencyRotate() external {
+        if (msg.sender != fallbackAdmin) revert NotFallbackAdmin();
+        if (block.timestamp < emergencyUnlock) revert TooEarly();
+        publicKeyOf[msg.sender] = PubKey(pendingX, pendingY);
+        emit EmergencyRotateExecuted(msg.sender, pendingX, pendingY);
+        // clean up
+        emergencyUnlock = 0;
+        pendingX = bytes32(0);
+        pendingY = bytes32(0);
+    }
+
+    /**
+     * @notice Update the fallback admin to a new address
+     * @dev Can only be called by the wallet itself (via primary key)
+     * @param newAdmin Address of new fallback admin
+     */
+    function updateFallbackAdmin(address newAdmin) external {
+        if (msg.sender != address(this)) revert OnlyWalletCanCall();
+        fallbackAdmin = newAdmin;
+        emit FallbackAdminChanged(newAdmin);
     }
 
     // --- Test Helpers --- // remove later

@@ -3,7 +3,7 @@ pragma solidity ^0.8.29;
 
 import {Test, console} from "lib/forge-std/src/Test.sol";
 
-// ERC-4337 EntryPoint simulation
+// ERC-4337 (Account Abstraction - EntryPoint simulations)
 import {EntryPointSimulations} from "lib/account-abstraction/contracts/core/EntryPointSimulations.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
@@ -25,6 +25,7 @@ contract RotateKey_OM_Test is Test {
     WalletFactory factory;
     OwnershipManagement ownershipModule;
     address ownerEOA;
+    address fallbackAdmin;
 
     // Deterministic address Daimo uses for the on-chain P256Verifier
     // The fixed address that the P-256 library staticcalls to on-chain.
@@ -43,6 +44,9 @@ contract RotateKey_OM_Test is Test {
         // create an EOA to be the owner of the wallet
         ownerEOA = vm.addr(1);
 
+        // create a fallback admin for the ownership module
+        fallbackAdmin = vm.addr(2);
+
         // intercept *any* staticcall to the P-256 precompile and return “true”
         vm.mockCall(P256_VERIFIER_ADDRESS, bytes(""), abi.encode(true));
     }
@@ -56,7 +60,7 @@ contract RotateKey_OM_Test is Test {
 
         // Factory.createWallet(salt, abi.encode(initialX, initialY)) - signed by ownerEOA
         vm.prank(ownerEOA);
-        ModularWallet wallet = factory.createWallet(salt, abi.encode(x0, y0));
+        ModularWallet wallet = factory.createWallet(salt, abi.encode(x0, y0, fallbackAdmin));
 
         // Verify the initial public key stored on-chain
         (bytes32 storedX0, bytes32 storedY0) = ownershipModule.getPublicKey(address(wallet));

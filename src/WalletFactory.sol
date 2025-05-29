@@ -36,7 +36,8 @@ contract WalletFactory {
     /**
      * @notice Deploys a new ModularWallet contract at a counterfactual address.
      * @param salt A unique salt for CREATE2.
-     * @param ownershipInitData ABI-encoded initialisation data for the ownership module (e.g public key).
+     * @param ownershipInitData ABI-encoded init data for the ownership module (e.g public key).
+     *        abi.encode(x, y, fallbackAdmin)
      * @return wallet The address of the newly created account instance.
      */
     function createWallet(bytes32 salt, bytes calldata ownershipInitData) external returns (ModularWallet wallet) {
@@ -59,10 +60,9 @@ contract WalletFactory {
      * @param salt  The CREATE2 salt to compute.
      * @return The counterfactually computed address.
      */
-    function getAddress(bytes32 salt) external view returns (address) {
+    function getAddress(bytes32 salt, bytes calldata ownershipInitData) external view returns (address) {
         bytes memory code = abi.encodePacked(
-            type(ModularWallet).creationCode,
-            abi.encode(address(i_entryPoint), i_ownershipModule, abi.encode(msg.sender))
+            type(ModularWallet).creationCode, abi.encode(address(i_entryPoint), i_ownershipModule, ownershipInitData)
         );
         return Create2.computeAddress(salt, keccak256(code));
     }

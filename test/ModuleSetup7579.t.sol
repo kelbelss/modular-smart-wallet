@@ -3,7 +3,7 @@ pragma solidity ^0.8.29;
 
 import {Test, console} from "lib/forge-std/src/Test.sol";
 
-// ERC-4337 EntryPoint simulation
+// ERC-4337 (Account Abstraction - EntryPoint simulations)
 import {EntryPointSimulations} from "lib/account-abstraction/contracts/core/EntryPointSimulations.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 
@@ -12,7 +12,7 @@ import {ModularWallet} from "../src/ModularWallet.sol";
 import {WalletFactory} from "../src/WalletFactory.sol";
 import {OwnershipManagement} from "../src/modules/OwnershipManagement.sol";
 
-// ERC-7579 Modular SCs code
+// ERC-7579 (Modular Smart Wallet)
 import {MockModule} from "./mocks/MockModule.sol";
 import {IERC7579Module} from "../src/erc7579/IERC7579Module.sol";
 import {ModuleTypeIds} from "../src/erc7579/ModuleTypeIds.sol";
@@ -34,11 +34,12 @@ contract ModuleSetup7579 is Test {
     function testInstallUninstallValidationModule() public {
         // A) Deploy a wallet for ownerEOA via CREATE2
         address ownerEOA = vm.addr(1);
+        address fallbackAdmin = vm.addr(2); // fallback admin for the ownership module
         bytes32 salt = keccak256("test");
         bytes32 testX = bytes32(uint256(0x123));
         bytes32 testY = bytes32(uint256(0x456));
         vm.prank(ownerEOA);
-        ModularWallet wallet = factory.createWallet(salt, abi.encode(testX, testY));
+        ModularWallet wallet = factory.createWallet(salt, abi.encode(testX, testY, fallbackAdmin));
 
         assertTrue(
             wallet.isModuleInstalled(ModuleTypeIds.SIGNER, address(ownershipModule)),

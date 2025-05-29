@@ -1,6 +1,6 @@
 # ERC-4337 Modular Smart Wallet with Passkey Support
 
-ModularWallet is a next-gen smart contract wallet built on Ethereum’s ERC-4337 Account Abstraction and the emerging ERC-7579 module standard. It offers counterfactual CREATE2 deployment, a lean immutable core, and a pluggable architecture: signature validation lives in a separate ERC-7780 “signer” module (OwnershipManagement), and execution logic (e.g. DCA) plugs in via ERC-7579 modules.
+ModularWallet is a modular smart contract wallet built on Ethereum’s ERC-4337 Account Abstraction and the emerging ERC-7579 module standard. It offers counterfactual CREATE2 deployment, a lean immutable core, and a pluggable architecture: signature validation lives in a separate ERC-7780 “signer” module (OwnershipManagement), and execution logic (e.g. DCA) plugs in via ERC-7579 modules.
 
 
 
@@ -35,7 +35,7 @@ ModularWallet is a next-gen smart contract wallet built on Ethereum’s ERC-4337
   - **Execution Modules (type 2)** handle on-chain operations (ERC-7579).  
 
 - **Break-Glass Recovery**  
-  A time-locked fallback admin path lets you schedule or execute emergency key rotations without redeploying the core.
+  A time locked fallback admin path lets you schedule or execute emergency key rotations without redeploying the core.
 
 
 
@@ -46,11 +46,11 @@ All business logic (ownership, DCA, recovery) is isolated in separate modules.
 
 
 2. **Separation of Concerns** 
-Leverage ERC-7579’s `install`/`uninstall` pattern to keep roles isolated and hot-swappable at runtime.
+Leverage ERC-7579’s `install`/`uninstall` pattern to keep roles isolated and swappable at runtime.
 
 
 3. **On-Chain Recovery & Rotation** 
-OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallback-admin path, keeping a validator live at all times.
+OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallback admin path, keeping a validator live at all times.
 
 
 
@@ -61,7 +61,7 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
 - **Based on** `BaseAccount` (ETH-Infinitism ERC-4337) for spec compliance.  
 - **Entrypoint Guard** 
   1. The `entryPoint()` override (inherited from `BaseAccount`) declares the trusted ERC-4337 EntryPoint. 
-  2. The `onlyEntryPoint` modifier on `installModule`, `uninstallModule`, and `execute` enforces that these critical functions are called exclusively by the trusted `IEntryPoint` instance declared by the `entryPoint()` function. This ensures that all module installs, removals, and user-initiated executions originate from `IEntryPoint.handleOps`. 
+  2. The `onlyEntryPoint` modifier on `installModule`, `uninstallModule`, and `execute` enforces that these critical functions are called exclusively by the trusted `IEntryPoint` instance declared by the `entryPoint()` function. This ensures that all module installs, removals, and user initiated executions originate from `IEntryPoint.handleOps`. 
 - **ERC-1271** support via `isValidSignature` and **ERC-165** via `supportsInterface`, alongside the ERC-4337 account interface.  
 
 ### WalletFactory.sol
@@ -77,7 +77,7 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
 
 ### OwnershipManagement.sol (Signer Module)
 
-- Implements **ERC-7780 ISigner**:  
+- **Implements ERC-7780 ISigner**:  
   - `checkUserOpSignature` for `userOp` flows  
   - `checkSignature` (ERC-1271) for `eth_sign`  
 - **Passkey Storage & Rotation**: stores a P-256 public key `(x, y)` and exposes atomic `rotateKey(newX,newY)` via a single UserOp.  
@@ -104,15 +104,15 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
 | ERC-1271 | Contract Signature Callback  | Ubiquitous; on-chain verifications      |
 
 
-> **Note:** EIP-6492 (“witness” format) is not included in this MVP. Production-grade bundlers will need it to validate counterfactual signatures.
+> **Note:** EIP-6492 (“witness” format) is not included in this MVP. Production grade bundlers will need it to validate counterfactual signatures.
 
 
 
 ## Design Decisions & Trade-Offs
 
 - **Passkey (WebAuthn P-256)**  
-  - Chose Daimo’s audited `p256-verifier` (~330 k gas) over custom or off-chain solutions.  
-  - Future swap to EIP-7212 precompile (≈20 k gas) with a one-line change—already live on some L1s/testnets.
+  - Chose Daimo’s audited `p256-verifier` (330 k gas) over custom or off-chain solutions.  
+  - Future swap to EIP-7212 precompile (20 k gas) with a one line change, already live on some L1s/testnets.
 
 - **Single-Call Execution Mode**  
   Only one `(to, value, data)` per UserOp to keep gas predictable and logic simple for MVP.
@@ -121,7 +121,7 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
   Avoided proxy pattern for DCA and OwnershipManagement to reduce complexity and attack surface. Future upgrades can introduce proxies once stability and governance controls are properly set.
 
 - **ERC-7579 + ERC-7780 vs. ERC-6900**  
-  Preferred the lighter, battle-tested 7579/7780 combo for clear separation of auth (type 6 “signer”) and functionality (type 2 “execution”) with strong ecosystem support.
+  Preferred the lighter, battle tested 7579/7780 combo for clear separation of auth (type 6 “signer”) and functionality (type 2 “execution”) with strong ecosystem support.
 
 
 

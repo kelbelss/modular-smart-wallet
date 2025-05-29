@@ -2,7 +2,7 @@
 
 ModularWallet is a next-gen smart contract wallet built on Ethereum’s ERC-4337 Account Abstraction and the emerging ERC-7579 module standard. It offers counterfactual CREATE2 deployment, a lean immutable core, and a pluggable architecture: signature validation lives in a separate ERC-7780 “signer” module (OwnershipManagement), and execution logic (e.g. DCA) plugs in via ERC-7579 modules.
 
----
+
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@ ModularWallet is a next-gen smart contract wallet built on Ethereum’s ERC-4337
   - [Design Decisions \& Trade-Offs](#design-decisions--trade-offs)
   - [Security Considerations](#security-considerations)
 
----
+
 
 ## Overview
 
@@ -37,7 +37,7 @@ ModularWallet is a next-gen smart contract wallet built on Ethereum’s ERC-4337
 - **Break-Glass Recovery**  
   A time-locked fallback admin path lets you schedule or execute emergency key rotations without redeploying the core.
 
----
+
 
 ## Design & Architecture
 
@@ -52,7 +52,7 @@ Leverage ERC-7579’s `install`/`uninstall` pattern to keep roles isolated and h
 3. **On-Chain Recovery & Rotation** 
 OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallback-admin path, keeping a validator live at all times.
 
----
+
 
 ## Core Components 
 
@@ -71,7 +71,7 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
   1. **Constructor** locks in `i_entryPoint` and `i_ownershipModule`.  
   2. **createWallet(salt, ownershipInitData)** ABI-packs the init data into the `ModularWallet` constructor and deploys via CREATE2.
 
----
+
 
 ## Module Design
 
@@ -92,7 +92,7 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
 - **No Custody**: transfers always execute through the wallet via `executeFromExecutor`.  
 - **Install/Uninstall**: plug in or remove without touching core wallet code.
 
----
+
 
 ## Standards
 
@@ -106,7 +106,7 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
 
 > **Note:** EIP-6492 (“witness” format) is not included in this MVP. Production-grade bundlers will need it to validate counterfactual signatures.
 
----
+
 
 ## Design Decisions & Trade-Offs
 
@@ -123,7 +123,7 @@ OwnershipManagement supports atomic `rotateKey` calls and a 24 h delayed fallbac
 - **ERC-7579 + ERC-7780 vs. ERC-6900**  
   Preferred the lighter, battle-tested 7579/7780 combo for clear separation of auth (type 6 “signer”) and functionality (type 2 “execution”) with strong ecosystem support.
 
----
+
 
 ## Security Considerations
 

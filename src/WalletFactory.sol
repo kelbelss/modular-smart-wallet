@@ -62,7 +62,8 @@ contract WalletFactory {
      */
     function getAddress(bytes32 salt, bytes calldata ownershipInitData) external view returns (address) {
         bytes memory code = abi.encodePacked(
-            type(ModularWallet).creationCode, abi.encode(address(i_entryPoint), i_ownershipModule, ownershipInitData)
+            type(ModularWallet).creationCode,
+            abi.encode(address(i_entryPoint), address(i_ownershipModule), ownershipInitData)
         );
         return Create2.computeAddress(salt, keccak256(code));
     }

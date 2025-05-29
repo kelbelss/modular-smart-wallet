@@ -71,12 +71,6 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     mapping(address => bytes32) public pendingXOf;
     mapping(address => bytes32) public pendingYOf;
 
-    // /// @notice Timestamp after which the emergency rotation can be executed
-    // uint256 public emergencyUnlock;
-    // /// @notice Pending fallback key coordinates
-    // bytes32 private pendingX;
-    // bytes32 private pendingY;
-
     // --- Module Identification ---
     /**
      * @inheritdoc IERC7579Module
@@ -190,9 +184,10 @@ contract OwnershipManagement is IERC7579Module, ISigner {
      * @notice Initiate a time-locked emergency key swap by fallback admin
      * @param newX X-coordinate for replacement key
      * @param newY Y-coordinate for replacement key
-     * @dev Called by fallbackAdmin to schedule emergency rotation
+     * @dev Called by wallet to schedule emergency rotation
      */
     function requestEmergencyRotate(bytes32 newX, bytes32 newY) external {
+        if (publicKeyOf[msg.sender].x == bytes32(0)) revert OnlyWalletCanCall();
         emergencyUnlockOf[msg.sender] = block.timestamp + 1 days;
         pendingXOf[msg.sender] = newX;
         pendingYOf[msg.sender] = newY;
@@ -201,9 +196,10 @@ contract OwnershipManagement is IERC7579Module, ISigner {
 
     /**
      * @notice Execute the scheduled emergency rotation after unlock time
-     * @dev Only fallbackAdmin can call, and only after emergencyUnlock
+     * @dev Only wallet can call, and only after emergencyUnlock
      */
     function executeEmergencyRotate() external {
+        if (publicKeyOf[msg.sender].x == bytes32(0)) revert OnlyWalletCanCall();
         require(block.timestamp >= emergencyUnlockOf[msg.sender], TooEarly());
         publicKeyOf[msg.sender] = PubKey(pendingXOf[msg.sender], pendingYOf[msg.sender]);
         emit EmergencyRotateExecuted(msg.sender, pendingXOf[msg.sender], pendingYOf[msg.sender]);
@@ -219,6 +215,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
      * @param newAdmin Address of new fallback admin
      */
     function updateFallbackAdmin(address newAdmin) external {
+        if (publicKeyOf[msg.sender].x == bytes32(0)) revert OnlyWalletCanCall();
         fallbackAdminOf[msg.sender] = newAdmin;
         emit FallbackAdminChanged(newAdmin);
     }

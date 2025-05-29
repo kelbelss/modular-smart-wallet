@@ -2,8 +2,8 @@
 pragma solidity ^0.8.29;
 
 import {ModularWallet} from "./ModularWallet.sol";
-import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
-import {Create2} from "lib/openzeppelin-contracts/contracts/utils/Create2.sol"; // audited, well-tested code for the low-level CREATE2 operations
+import {IEntryPoint} from "account-abstraction/contracts/interfaces/IEntryPoint.sol";
+import {Create2} from "openzeppelin-contracts/contracts/utils/Create2.sol"; // audited, well-tested code for the low-level CREATE2 operations
 
 /**
  * @title WalletFactory

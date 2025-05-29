@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.29;
 
-import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 // ERC-7579 (Modular Smart Account)
 import {IERC7579Module} from "../erc7579/IERC7579Module.sol";
@@ -12,23 +12,6 @@ import {ModuleTypeIds} from "../erc7579/ModuleTypeIds.sol";
  * @title Dollar-Cost-Averaging (DCA) Execution Module
  * @notice Minimal ERC-7579 EXECUTION module that lets a wallet stream a fixed amount of ETH or an ERC-20
  *         at regular, user-defined intervals.
- * @dev -‐- How it works
- *
- * 1.  The wallet (owner) calls `createPlan()` once through
- *     `wallet.execute(...)`.
- * 2.  Anyone may later trigger `run(planId)` **after** the interval
- *     has elapsed.
- * 3.  `run()` re-schedules itself (`nextExec`) and performs exactly
- *     one transfer:
- *         • ETH → wallet executes a value-call to `destination`.
- *         • ERC-20 → wallet executes `token.transfer(destination, amount)`.
- *
- *  The module never holds funds itself; transfers are performed
- *  *via* the wallet, so balances/allowances remain exactly as if the
- *  owner had signed the call.
- *
- *  ▸ Gas / audit surface kept intentionally tiny for take-home test.
- *
  * @author Kelly Smulian
  */
 contract DCA is IERC7579Module {
@@ -60,7 +43,7 @@ contract DCA is IERC7579Module {
 
     /// @inheritdoc IERC7579Module
     /// @dev no special init needed for this MVP
-    function onInstall(bytes calldata) external override { /* nothing */ }
+    function onInstall(bytes calldata) external override {}
 
     /// @inheritdoc IERC7579Module
     /// @dev remove all plans for the wallet that un-installs
@@ -69,7 +52,6 @@ contract DCA is IERC7579Module {
     }
 
     // --- External Functions ---
-
     /**
      * @notice Create a new periodic DCA plan.
      * @param token ERC-20 to spend, or `address(0)` for ETH
@@ -84,7 +66,7 @@ contract DCA is IERC7579Module {
 
     /**
      * @notice Execute one occurrence of a previously created plan.
-     * @dev Re-entrancy safe: wallet → DCA → wallet.executeFromExecutor never re-enters this contract.
+     * @dev wallet → DCA → wallet.executeFromExecutor never re-enters this contract.
      * @param  planId  Index returned by `createPlan`
      */
     function run(uint256 planId) external {
@@ -102,12 +84,7 @@ contract DCA is IERC7579Module {
         } else {
             // ERC-20 – pull straight from the wallet’s balance
             IERC20(plan.token).transferFrom(msg.sender, plan.destination, plan.amount);
-
-            // IERC7579Execution wallet = IERC7579Execution(msg.sender);
-            // bytes memory data = abi.encodeWithSelector(IERC20.transfer.selector, p.dest, p.amount);
-            // wallet.executeFromExecutor(bytes32(0), abi.encode(p.token, uint256(0), data));
         }
-
         emit PlanExecuted(msg.sender, planId);
     }
 

@@ -7,8 +7,8 @@ import {ISigner} from "../erc7579/ISigner.sol";
 import {ModuleTypeIds} from "../erc7579/ModuleTypeIds.sol";
 
 // ERC-4337 (UserOp Utils)
-import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
-import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
+import {PackedUserOperation} from "account-abstraction/contracts/interfaces/PackedUserOperation.sol";
+import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "account-abstraction/contracts/core/Helpers.sol";
 
 // P-256 WebAuthn Verification Libraries
 import {P256Verifier} from "lib/p256-verifier-solcv29/P256Verifier.sol";
@@ -16,11 +16,11 @@ import {WebAuthn} from "lib/p256-verifier-solcv29/WebAuthn.sol";
 import {P256} from "lib/p256-verifier-solcv29/P256.sol";
 
 // ERC-1271 Smart Contract Sig
-import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271.sol";
+import {IERC1271} from "openzeppelin-contracts/contracts/interfaces/IERC1271.sol";
 
 // ECDSA Signature Recovery for Fallback Admin
-import {ECDSA} from "lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
-import {MessageHashUtils} from "lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
+import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
  * @title OwnershipManagement
@@ -134,13 +134,12 @@ contract OwnershipManagement is IERC7579Module, ISigner {
             bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
             // recover the signer address from the signature
             address signer = ECDSA.recover(ethHash, op.signature);
-            // compare against the configured fallback admin for THIS wallet
+            // compare against the configured fallback admin
             if (signer == fallbackAdminOf[msg.sender]) {
                 return SIG_VALIDATION_SUCCESS;
             }
             return SIG_VALIDATION_FAILED;
         }
-
         PasskeySig memory pkSig = abi.decode(op.signature, (PasskeySig));
         if (_verify(publicKeyOf[msg.sender], pkSig)) {
             return SIG_VALIDATION_SUCCESS;

@@ -2,11 +2,11 @@
 pragma solidity ^0.8.29;
 
 // ERC-4337 (Account Abstraction)
-import {BaseAccount} from "lib/account-abstraction/contracts/core/BaseAccount.sol";
-import {IAccount} from "lib/account-abstraction/contracts/interfaces/IAccount.sol";
-import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
-import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
-import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
+import {BaseAccount} from "account-abstraction/contracts/core/BaseAccount.sol";
+import {IAccount} from "account-abstraction/contracts/interfaces/IAccount.sol";
+import {IEntryPoint} from "account-abstraction/contracts/interfaces/IEntryPoint.sol";
+import {PackedUserOperation} from "account-abstraction/contracts/interfaces/PackedUserOperation.sol";
+import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "account-abstraction/contracts/core/Helpers.sol";
 
 // ERC-7579 (Modular Smart Account)
 import {IERC7579Module} from "./erc7579/IERC7579Module.sol";
@@ -16,11 +16,11 @@ import {ModuleTypeIds} from "./erc7579/ModuleTypeIds.sol";
 import {ISigner} from "./erc7579/ISigner.sol";
 
 // ERC-165
-import {ERC165} from "lib/openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
-import {IERC165} from "lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
+import {ERC165} from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
+import {IERC165} from "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 
 // ERC-1271 (Smart Contract Signatures)
-import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271.sol";
+import {IERC1271} from "openzeppelin-contracts/contracts/interfaces/IERC1271.sol";
 
 /**
  * @title ModularWallet

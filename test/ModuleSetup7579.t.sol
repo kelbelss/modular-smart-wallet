@@ -17,6 +17,11 @@ import {MockModule} from "./mocks/MockModule.sol";
 import {IERC7579Module} from "../src/erc7579/IERC7579Module.sol";
 import {ModuleTypeIds} from "../src/erc7579/ModuleTypeIds.sol";
 
+/**
+ * @title ModuleSetup7579
+ * @notice This test deploys a wallet with the OwnershipManagement module installed, then installs and uninstalls a mock
+ *      validation module to test the installation and uninstallation flow.
+ */
 contract ModuleSetup7579 is Test {
     EntryPointSimulations entryPoint;
     WalletFactory factory;

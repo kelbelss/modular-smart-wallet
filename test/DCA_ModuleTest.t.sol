@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.29;
 
-/**
- * @title DCA_ModuleTest
- * @notice Happy path test: create an ETH plan, wait a day, run it once.
- */
 import {Test, console} from "lib/forge-std/src/Test.sol";
 
 // ERC-4337 (Account Abstraction - EntryPoint simulations)
@@ -20,6 +16,10 @@ import {DCA} from "../src/modules/DCA.sol";
 // ERC-7579 (Modular Smart Wallet)
 import {ModuleTypeIds} from "../src/erc7579/ModuleTypeIds.sol";
 
+/**
+ * @title DCA_ModuleTest
+ * @notice Happy path test: create an ETH plan, wait a day, run it once.
+ */
 contract DCA_ModuleTest is Test {
     EntryPointSimulations private entryPoint;
     WalletFactory private factory;

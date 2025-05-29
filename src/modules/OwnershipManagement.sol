@@ -18,6 +18,10 @@ import {P256} from "lib/p256-verifier/src/P256.sol";
 // ERC-1271 Smart Contract Sig
 import {IERC1271} from "lib/openzeppelin-contracts/contracts/interfaces/IERC1271.sol";
 
+// ECDSA Signature Recovery for Fallback Admin
+import {ECDSA} from "lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
+
 /**
  * @title OwnershipManagement
  * @notice ERC-7579 "signer" (ERC-7780) module for passkey-based signature validation using WebAuthn P-256, with
@@ -37,9 +41,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
 
     // --- Errors ---
     error OnlyWalletCanCall();
-    error NotFallbackAdmin();
     error TooEarly();
-    // error NoSignerModule();
 
     // --- Types ---
     /// @notice Uncompressed P-256 public key coordinates
@@ -59,16 +61,21 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     // --- State ---
     /// @notice wallet address => its P-256 public key
     mapping(address wallet => PubKey) internal publicKeyOf; //  wallet → key
-    // /// @notice wallet address => owner EOA (optional future use)
-    // mapping(address => address) private ownerOf;
+    // /// @notice wallet address =>  it's fallback EOA admin address
+    mapping(address => address) private fallbackAdminOf;
 
-    /// @notice Fallback admin allowed to perform emergency recovery
-    address public fallbackAdmin;
-    /// @notice Timestamp after which the emergency rotation can be executed
-    uint256 public emergencyUnlock;
-    /// @notice Pending fallback key coordinates
-    bytes32 private pendingX;
-    bytes32 private pendingY;
+    /// @notice wallet ⇒ timestamp when emergency rotation unlocks
+    mapping(address => uint256) public emergencyUnlockOf;
+
+    /// @notice wallet ⇒ pending fallback key X and Y coords
+    mapping(address => bytes32) public pendingXOf;
+    mapping(address => bytes32) public pendingYOf;
+
+    // /// @notice Timestamp after which the emergency rotation can be executed
+    // uint256 public emergencyUnlock;
+    // /// @notice Pending fallback key coordinates
+    // bytes32 private pendingX;
+    // bytes32 private pendingY;
 
     // --- Module Identification ---
     /**
@@ -88,7 +95,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     function onInstall(bytes calldata initData) external override {
         (bytes32 x, bytes32 y, address fbAdmin) = abi.decode(initData, (bytes32, bytes32, address));
         publicKeyOf[msg.sender] = PubKey(x, y);
-        fallbackAdmin = fbAdmin; // emergencyUnlock and pending keys default to zero
+        fallbackAdminOf[msg.sender] = fbAdmin; // emergencyUnlock and pending keys default to zero
     }
 
     /**
@@ -97,10 +104,10 @@ contract OwnershipManagement is IERC7579Module, ISigner {
      */
     function onUninstall(bytes calldata) external override {
         delete publicKeyOf[msg.sender];
-        delete fallbackAdmin;
-        delete emergencyUnlock;
-        delete pendingX;
-        delete pendingY;
+        delete fallbackAdminOf[msg.sender];
+        delete emergencyUnlockOf[msg.sender];
+        delete pendingXOf[msg.sender];
+        delete pendingYOf[msg.sender];
     }
 
     // --- Signature Verification ---
@@ -122,8 +129,24 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     function checkUserOpSignature(
         bytes32, // id (ignored here)
         PackedUserOperation calldata op, // full op
-        bytes32 // userOpHash – already inside clientDataJSON.challenge
+        bytes32 userOpHash // inside clientDataJSON.challenge
     ) external payable override returns (uint256 validationData) {
+        //  if data selector is requestEmergencyRotate or executeEmergencyRotate:
+        bytes4 sel = bytes4(op.callData[:4]);
+        if (
+            sel == OwnershipManagement.requestEmergencyRotate.selector
+                || sel == OwnershipManagement.executeEmergencyRotate.selector
+        ) {
+            bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
+            // recover the signer address from the signature
+            address signer = ECDSA.recover(ethHash, op.signature);
+            // compare against the configured fallback admin for THIS wallet
+            if (signer == fallbackAdminOf[msg.sender]) {
+                return SIG_VALIDATION_SUCCESS;
+            }
+            return SIG_VALIDATION_FAILED;
+        }
+
         PasskeySig memory pkSig = abi.decode(op.signature, (PasskeySig));
         if (_verify(publicKeyOf[msg.sender], pkSig)) {
             return SIG_VALIDATION_SUCCESS;
@@ -170,11 +193,10 @@ contract OwnershipManagement is IERC7579Module, ISigner {
      * @dev Called by fallbackAdmin to schedule emergency rotation
      */
     function requestEmergencyRotate(bytes32 newX, bytes32 newY) external {
-        if (msg.sender != fallbackAdmin) revert NotFallbackAdmin();
-        emergencyUnlock = block.timestamp + 1 days;
-        pendingX = newX;
-        pendingY = newY;
-        emit EmergencyRotateRequested(msg.sender, newX, newY, emergencyUnlock);
+        emergencyUnlockOf[msg.sender] = block.timestamp + 1 days;
+        pendingXOf[msg.sender] = newX;
+        pendingYOf[msg.sender] = newY;
+        emit EmergencyRotateRequested(msg.sender, newX, newY, emergencyUnlockOf[msg.sender]);
     }
 
     /**
@@ -182,14 +204,13 @@ contract OwnershipManagement is IERC7579Module, ISigner {
      * @dev Only fallbackAdmin can call, and only after emergencyUnlock
      */
     function executeEmergencyRotate() external {
-        if (msg.sender != fallbackAdmin) revert NotFallbackAdmin();
-        if (block.timestamp < emergencyUnlock) revert TooEarly();
-        publicKeyOf[msg.sender] = PubKey(pendingX, pendingY);
-        emit EmergencyRotateExecuted(msg.sender, pendingX, pendingY);
-        // clean up
-        emergencyUnlock = 0;
-        pendingX = bytes32(0);
-        pendingY = bytes32(0);
+        require(block.timestamp >= emergencyUnlockOf[msg.sender], TooEarly());
+        publicKeyOf[msg.sender] = PubKey(pendingXOf[msg.sender], pendingYOf[msg.sender]);
+        emit EmergencyRotateExecuted(msg.sender, pendingXOf[msg.sender], pendingYOf[msg.sender]);
+        // clear
+        emergencyUnlockOf[msg.sender] = 0;
+        pendingXOf[msg.sender] = bytes32(0);
+        pendingYOf[msg.sender] = bytes32(0);
     }
 
     /**
@@ -198,8 +219,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
      * @param newAdmin Address of new fallback admin
      */
     function updateFallbackAdmin(address newAdmin) external {
-        if (msg.sender != address(this)) revert OnlyWalletCanCall();
-        fallbackAdmin = newAdmin;
+        fallbackAdminOf[msg.sender] = newAdmin;
         emit FallbackAdminChanged(newAdmin);
     }
 

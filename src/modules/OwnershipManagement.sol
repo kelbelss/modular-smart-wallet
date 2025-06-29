@@ -39,6 +39,8 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     /// @notice Emitted when an emergency key rotation is executed
     event EmergencyRotateExecuted(address indexed wallet, bytes32 newX, bytes32 newY);
 
+    // @note Good UX: frontend can listen for rotation status
+
     // --- Errors ---
     error OnlyWalletCanCall();
     error TooEarly();
@@ -70,6 +72,8 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     /// @notice wallet ⇒ pending fallback key X and Y coords
     mapping(address => bytes32) public pendingXOf;
     mapping(address => bytes32) public pendingYOf;
+
+    // @note 'of' mappings - keeps module reusable across many wallets with one deployment
 
     // --- Module Identification ---
     /**
@@ -106,6 +110,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
 
     // --- Signature Verification ---
     /// @dev Internal helper to hash and verify a passkey signature via P-256 library
+    // @note switch to EIP-7212 precompile for 20k gas later, currently 330k with P-256 library
     function _verify(PubKey storage pubKey, PasskeySig memory pkSig) private view returns (bool) {
         // 1) Hash the clientDataJSON
         bytes32 clientDataHash = sha256(pkSig.clientDataJSON);
@@ -151,6 +156,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
      * @inheritdoc ISigner
      * @dev Implements the ERC-1271 contract signature scheme for arbitrary hashes.
      */
+    // @note ERC-1271 callback for SIWE / Permit2. Uses _verify.
     function checkSignature(
         bytes32, // config ID (ignored)
         address sender,
@@ -179,6 +185,7 @@ contract OwnershipManagement is IERC7579Module, ISigner {
     }
 
     // --- Emergency Recovery ---
+    // @note fallback admin schedules new key with 24h timelock, then executes after delay.
     /**
      * @notice Initiate a time-locked emergency key swap by fallback admin
      * @param newX X-coordinate for replacement key

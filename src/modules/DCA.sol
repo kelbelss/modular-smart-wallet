@@ -21,8 +21,10 @@ contract DCA is IERC7579Module {
 
     // --- Errors ---
     error DCA_TooEarly();
+    error DCA_IntervalCannotBeZero();
 
     // --- Types ---
+    // @note uses packed types (uint96, uint32, uint64) → one storage slot per plan
     struct Plan {
         address token; // ERC-20 or address(0) for native ETH
         address destination; // receiver
@@ -60,6 +62,8 @@ contract DCA is IERC7579Module {
      * @param interval Seconds between two successive runs
      */
     function createPlan(address token, address destination, uint96 amount, uint32 interval) external {
+        // check that interval is not 0 otherwise wallet can spam run() calls
+        require(interval > 0, DCA_IntervalCannotBeZero());
         plans[msg.sender].push(Plan(token, destination, amount, interval, uint64(block.timestamp + interval)));
         emit PlanCreated(msg.sender, plans[msg.sender].length - 1);
     }

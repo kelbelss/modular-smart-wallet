@@ -19,6 +19,7 @@ ModularWallet is a modular smart contract wallet built on Ethereum’s ERC-4337 
   - [Standards](#standards)
   - [Design Decisions \& Trade-Offs](#design-decisions--trade-offs)
   - [Security Considerations](#security-considerations)
+  - [Milestones](#milestones)
 
 
 
@@ -132,5 +133,9 @@ A more elegant DCA module can be built by integrating [UniSwap v4 TWAMM Hooks](h
 - All module installs/uninstalls require a validated UserOp via EntryPoint.
 
 
+## Milestones
 
-
+| Tag                                                                                | Date        | Notes                              |
+| ---------------------------------------------------------------------------------- | ----------- | ---------------------------------- |
+| [v0.1-mvp](https://github.com/kelbelss/modular-smart-wallet/releases/tag/v0.1-mvp) | 23 May 2025 | Technical assessment submission    |
+| _Next_: `v0.2-spec-fixes`                                                          | _TBD_       | 4337 / 7579 spec-compliance checks |
